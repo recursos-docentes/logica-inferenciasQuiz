@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LogicQuest: Entrenamiento de Un Paso</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600;700&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+  
+  <style>
+    body {
+      font-family: 'Outfit', sans-serif;
+      font-size: 17px;
+    }
+    .code-font {
+      font-family: 'Fira Code', monospace;
+    }
+    /* Neon glows */
+    .glow-purple {
+      box-shadow: 0 0 15px rgba(139, 92, 246, 0.4);
+    }
+    .glow-green {
+      box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
+    }
+    .glow-cyan {
+      box-shadow: 0 0 15px rgba(6, 182, 212, 0.4);
+    }
+    .glow-rose {
+      box-shadow: 0 0 15px rgba(244, 63, 94, 0.4);
+    }
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col overflow-x-hidden selection:bg-violet-500 selection:text-white">
+
+  <!-- Sonidos Sintetizados (Web Audio API) -->
+  <script>
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    let audioCtx = null;
+
+    function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new AudioCtx();
+      }
+    }
+
+    function playSound(type) {
+      try {
+        initAudio();
+        if (!audioCtx) return;
+        
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        const now = audioCtx.currentTime;
+
+        if (type === 'click') {
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(500, now);
+          osc.frequency.exponentialRampToValueAtTime(150, now + 0.08);
+          gain.gain.setValueAtTime(0.08, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+          osc.start(now);
+          osc.stop(now + 0.08);
+        } else if (type === 'correct_step') {
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(350, now);
+          osc.frequency.setValueAtTime(650, now + 0.08);
+          gain.gain.setValueAtTime(0.1, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.16);
+          osc.start(now);
+          osc.stop(now + 0.16);
+        } else if (type === 'success') {
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(261.63, now); // C4
+          osc.frequency.setValueAtTime(329.63, now + 0.12); // E4
+          osc.frequency.setValueAtTime(392.00, now + 0.24); // G4
+          osc.frequency.setValueAtTime(523.25, now + 0.36); // C5
+          gain.gain.setValueAtTime(0.12, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+          osc.start(now);
+          osc.stop(now + 0.5);
+        } else if (type === 'error') {
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(140, now);
+          osc.frequency.linearRampToValueAtTime(70, now + 0.25);
+          gain.gain.setValueAtTime(0.12, now);
+          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+          osc.start(now);
+          osc.stop(now + 0.25);
+        } else if (type === 'level_up') {
+          const notes = [293.66, 349.23, 440.00, 523.25, 587.33, 698.46, 880.00];
+          notes.forEach((freq, index) => {
+            const o = audioCtx.createOscillator();
+            const g = audioCtx.createGain();
+            o.connect(g);
+            g.connect(audioCtx.destination);
+            o.type = 'sine';
+            o.frequency.setValueAtTime(freq, now + (index * 0.06));
+            g.gain.setValueAtTime(0.08, now + (index * 0.06));
+            g.gain.exponentialRampToValueAtTime(0.001, now + (index * 0.06) + 0.25);
+            o.start(now + (index * 0.06));
+            o.stop(now + (index * 0.06) + 0.25);
+          });
+        }
+      } catch (e) {
+        console.log("Audio no soportado o bloqueado por el navegador.");
+      }
+    }
+  </script>
+
+  <!-- Navbar / Header -->
+  <header class="border-b border-slate-800 bg-slate-900/60 backdrop-blur sticky top-0 z-40 px-4 py-3">
+    <div class="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-4">
+      <div class="flex items-center space-x-3 cursor-pointer" onclick="playSound('click'); showHome();">
+        <div class="bg-gradient-to-tr from-violet-600 to-cyan-400 p-2.5 rounded-xl glow-purple">
+          <i class="fa-solid fa-brain text-xl text-white"></i>
+        </div>
+        <div>
+          <h1 class="text-xl font-extrabold tracking-wider bg-gradient-to-r from-violet-400 via-fuchsia-400 to-cyan-400 bg-clip-text text-transparent">LOGICQUEST</h1>
+          <p class="text-xs text-slate-400 font-semibold uppercase tracking-widest">Nivel Inicial: Reglas y Falacias</p>
+        </div>
+      </div>
+
+      <!-- Stats Bar -->
+      <div class="flex items-center space-x-4">
+        <!-- XP -->
+        <div class="bg-slate-950/80 px-3 py-1.5 rounded-lg border border-slate-800 flex items-center space-x-2">
+          <i class="fa-solid fa-bolt text-yellow-400"></i>
+          <span class="text-xs text-slate-400 uppercase font-semibold">XP:</span>
+          <span id="global-xp" class="text-sm font-bold text-yellow-400">0</span>
+        </div>
+        <!-- Racha -->
+        <div class="bg-slate-950/80 px-3 py-1.5 rounded-lg border border-slate-800 flex items-center space-x-2">
+          <i class="fa-solid fa-fire text-orange-500 animate-pulse"></i>
+          <span class="text-xs text-slate-400 uppercase font-semibold">Racha:</span>
+          <span id="global-streak" class="text-sm font-bold text-orange-400">0</span>
+        </div>
+        <!-- Rango -->
+        <div class="hidden sm:flex bg-slate-950/80 px-3 py-1.5 rounded-lg border border-slate-800 items-center space-x-2">
+          <i class="fa-solid fa-shield-halved text-cyan-400"></i>
+          <span class="text-xs text-slate-400 uppercase font-semibold">Rango:</span>
+          <span id="global-rank" class="text-sm font-bold text-cyan-400">Iniciado Lógico</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="flex-grow max-w-7xl w-full mx-auto p-4 flex flex-col lg:flex-row gap-6">
+
+    <!-- LEFT SIDEBAR: Levels & Scoreboard -->
+    <section class="w-full lg:w-1/3 flex flex-col gap-6">
+      
+      <!-- Levels / Map -->
+      <div class="bg-slate-900/50 border border-slate-800/80 rounded-2xl p-5 backdrop-blur">
+        <h3 class="text-md font-extrabold uppercase tracking-wider text-slate-400 mb-4 flex items-center justify-between">
+          <span><i class="fa-solid fa-network-wired mr-2 text-violet-500"></i>Nodos de Red</span>
+          <span class="text-xs bg-slate-800 px-2.5 py-0.5 rounded-full text-slate-300 font-semibold" id="mission-progress">0/8 Descifrados</span>
+        </h3>
+        <div class="space-y-3" id="levels-list">
+          <!-- Levels injected by JS -->
+        </div>
+      </div>
+
+      <!-- Quick Cheat Sheet of Connectors -->
+      <div class="bg-slate-900/50 border border-slate-800/80 rounded-2xl p-5 backdrop-blur">
+        <h3 class="text-md font-extrabold uppercase tracking-wider text-slate-400 mb-3 flex items-center">
+          <i class="fa-solid fa-tags mr-2 text-cyan-500"></i>Símbolos de Clase
+        </h3>
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <div class="bg-slate-950/50 p-2 rounded-lg border border-slate-800/60">
+            <span class="font-extrabold text-cyan-400 code-font text-sm">¬</span> Negación
+          </div>
+          <div class="bg-slate-950/50 p-2 rounded-lg border border-slate-800/60">
+            <span class="font-extrabold text-cyan-400 code-font text-sm">∧</span> Conjunción
+          </div>
+          <div class="bg-slate-950/50 p-2 rounded-lg border border-slate-800/60">
+            <span class="font-extrabold text-cyan-400 code-font text-sm">∨</span> Disyunción
+          </div>
+          <div class="bg-slate-950/50 p-2 rounded-lg border border-slate-800/60">
+            <span class="font-extrabold text-cyan-400 code-font text-sm">→</span> Implicación
+          </div>
+          <div class="bg-slate-950/50 p-2 rounded-lg border-b border-slate-800/60 col-span-2 text-center">
+            <span class="font-extrabold text-cyan-400 code-font text-sm">↔</span> Bicondicional
+          </div>
+        </div>
+      </div>
+
+      <!-- Inference Rules -->
+      <div class="bg-slate-900/50 border border-slate-800/80 rounded-2xl p-5 backdrop-blur">
+        <h3 class="text-md font-extrabold uppercase tracking-wider text-slate-400 mb-3 flex items-center">
+          <i class="fa-solid fa-sitemap mr-2 text-violet-500"></i>Reglas de Inferencia
+        </h3>
+        <div class="space-y-3 text-xs">
+
+          <div class="bg-slate-950/50 p-3 rounded-lg border border-slate-800/60">
+            <p class="text-violet-400 font-extrabold mb-1 uppercase tracking-widest text-[10px]">Modus Ponens (MP)</p>
+            <div class="code-font text-slate-300 leading-relaxed">p → q<br>p<br><span class="border-t border-slate-600 block pt-1 text-emerald-400">∴ q</span></div>
+          </div>
+
+          <div class="bg-slate-950/50 p-3 rounded-lg border border-slate-800/60">
+            <p class="text-violet-400 font-extrabold mb-1 uppercase tracking-widest text-[10px]">Modus Tollens (MT)</p>
+            <div class="code-font text-slate-300 leading-relaxed">p → q<br>¬q<br><span class="border-t border-slate-600 block pt-1 text-emerald-400">∴ ¬p</span></div>
+          </div>
+
+          <div class="bg-slate-950/50 p-3 rounded-lg border border-slate-800/60">
+            <p class="text-violet-400 font-extrabold mb-1 uppercase tracking-widest text-[10px]">Silogismo Disyuntivo (SD)</p>
+            <div class="code-font text-slate-300 leading-relaxed">p ∨ q<br>¬p<br><span class="border-t border-slate-600 block pt-1 text-emerald-400">∴ q</span></div>
+          </div>
+
+          <div class="bg-slate-950/50 p-3 rounded-lg border border-slate-800/60">
+            <p class="text-violet-400 font-extrabold mb-1 uppercase tracking-widest text-[10px]">Simplificación (SIMP)</p>
+            <div class="code-font text-slate-300 leading-relaxed">p ∧ q<br><span class="border-t border-slate-600 block pt-1 text-emerald-400">∴ p</span></div>
+          </div>
+
+          <div class="bg-slate-950/50 p-3 rounded-lg border border-slate-800/60">
+            <p class="text-violet-400 font-extrabold mb-1 uppercase tracking-widest text-[10px]">Conjunción (CONJ)</p>
+            <div class="code-font text-slate-300 leading-relaxed">p&nbsp;&nbsp;&nbsp;q<br><span class="border-t border-slate-600 block pt-1 text-emerald-400">∴ p ∧ q</span></div>
+          </div>
+
+          <div class="bg-slate-950/50 p-3 rounded-lg border border-slate-800/60">
+            <p class="text-violet-400 font-extrabold mb-1 uppercase tracking-widest text-[10px]">Doble Negación (DN)</p>
+            <div class="code-font text-slate-300 leading-relaxed">¬¬p<br><span class="border-t border-slate-600 block pt-1 text-emerald-400">∴ p</span></div>
+          </div>
+
+          <div class="bg-slate-950/50 p-3 rounded-lg border border-slate-800/60">
+            <p class="text-violet-400 font-extrabold mb-1 uppercase tracking-widest text-[10px]">Silogismo Hipotético (SH)</p>
+            <div class="code-font text-slate-300 leading-relaxed">p → q<br>q → r<br><span class="border-t border-slate-600 block pt-1 text-emerald-400">∴ p → r</span></div>
+          </div>
+
+          <div class="bg-slate-950/50 p-3 rounded-lg border border-slate-800/60">
+            <p class="text-violet-400 font-extrabold mb-1 uppercase tracking-widest text-[10px]">Adición (AD)</p>
+            <div class="code-font text-slate-300 leading-relaxed">p<br><span class="border-t border-slate-600 block pt-1 text-emerald-400">∴ p ∨ q</span></div>
+          </div>
+
+          <div class="bg-slate-950/50 p-3 rounded-lg border border-rose-800/40">
+            <p class="text-rose-400 font-extrabold mb-1 uppercase tracking-widest text-[10px]">⚠ Falacia: Afirm. del Consecuente</p>
+            <div class="code-font text-slate-300 leading-relaxed">p → q<br>q<br><span class="border-t border-rose-800/60 block pt-1 text-rose-400">∴ p &nbsp;✗</span></div>
+          </div>
+
+          <div class="bg-slate-950/50 p-3 rounded-lg border border-rose-800/40">
+            <p class="text-rose-400 font-extrabold mb-1 uppercase tracking-widest text-[10px]">⚠ Falacia: Negac. del Antecedente</p>
+            <div class="code-font text-slate-300 leading-relaxed">p → q<br>¬p<br><span class="border-t border-rose-800/60 block pt-1 text-rose-400">∴ ¬q &nbsp;✗</span></div>
+          </div>
+
+        </div>
+      </div>
+
+    </section>
+
+    <!-- RIGHT CONTENT: Game Arena -->
+    <section class="w-full lg:w-2/3 flex flex-col gap-6">
+      
+      <!-- Welcome Panel / Main game view -->
+      <div id="welcome-panel" class="bg-gradient-to-br from-slate-900 via-slate-900 to-violet-950/30 border border-slate-800 rounded-3xl p-8 flex flex-col justify-center items-center text-center gap-6 min-h-[500px]">
+        <div class="w-24 h-24 bg-gradient-to-tr from-violet-600 to-cyan-400 rounded-3xl flex items-center justify-center glow-purple animate-bounce">
+          <i class="fa-solid fa-shield-virus text-4xl text-white"></i>
+        </div>
+        <div>
+          <span class="text-xs bg-violet-500/10 text-violet-400 border border-violet-500/20 px-3 py-1 rounded-full uppercase tracking-widest font-extrabold">Filtro de Inferencia y Falacias</span>
+          <h2 class="text-3xl sm:text-4xl font-black mt-3 bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent">LogicQuest: Entrenamiento de Un Paso</h2>
+          <p class="text-slate-400 mt-3 max-w-md mx-auto text-sm sm:text-base leading-relaxed">
+            Aprende a deducir las conclusiones correctas y a desenmascarar las falacias lógicas que las IA enemigas usan para confundirte. ¡Un solo paso de deducción lógica por nivel!
+          </p>
+        </div>
+        <button onclick="playSound('level_up'); startLevel(0);" class="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-extrabold px-8 py-3.5 rounded-xl glow-purple transform transition active:scale-95 text-lg">
+          <i class="fa-solid fa-play mr-2"></i>Comenzar Entrenamiento
+        </button>
+      </div>
+
+      <!-- Active Game Arena (Hidden initially) -->
+      <div id="game-arena" class="hidden flex flex-col gap-6">
+        
+        <!-- Level Tracker Bar -->
+        <div class="flex items-center justify-between bg-slate-900/40 border border-slate-800 p-3 rounded-xl">
+          <div class="flex items-center space-x-2">
+            <span id="level-badge" class="text-xs uppercase font-extrabold tracking-widest px-2.5 py-0.5 rounded-full bg-violet-500/20 text-violet-400 border border-violet-500/20">Misión 1</span>
+            <span id="difficulty-badge" class="text-[10px] uppercase font-extrabold tracking-widest px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400">Fácil</span>
+          </div>
+          <div class="text-xs text-slate-400">
+            <span class="font-bold text-white">Objetivo:</span> Descifrar la estructura lógica
+          </div>
+        </div>
+
+        <!-- The Premise Board -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 relative overflow-hidden">
+          <div class="absolute -right-16 -top-16 w-48 h-48 bg-gradient-to-br from-violet-600/10 to-transparent rounded-full blur-2xl"></div>
+          
+          <div class="mb-4">
+            <h4 id="level-title" class="text-base font-extrabold text-white tracking-tight"></h4>
+            <p id="level-story" class="text-xs text-slate-400 mt-1 leading-relaxed"></p>
+          </div>
+          <span class="text-sm font-bold text-violet-400 uppercase tracking-wider block mb-3"><i class="fa-solid fa-align-left mr-1.5"></i>Premisas Entregadas:</span>
+          
+          <div class="space-y-3" id="premises-container">
+            <!-- Premisas en formato de tarjetas estructuradas, ej: s ⇒ v -->
+          </div>
+        </div>
+
+        <!-- Gameplay Steps -->
+        <div class="flex flex-col gap-5">
+
+          <!-- STEP 1: CONCLUSION IN SPANISH -->
+          <div id="step-1-card" class="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 flex flex-col gap-4 transition-all duration-300">
+            <h3 class="text-sm font-extrabold uppercase tracking-wider text-slate-300 flex items-center justify-between">
+              <span><span class="bg-violet-600 text-white text-[10px] w-5 h-5 inline-flex items-center justify-center rounded-full mr-2 font-mono">1</span>¿Qué se puede concluir?</span>
+              <span id="step-1-status" class="text-xs text-yellow-400 font-bold"><i class="fa-solid fa-spinner animate-spin"></i> Esperando</span>
+            </h3>
+            <p class="text-sm text-slate-400">Selecciona en lenguaje natural la conclusión que se deriva de las premisas:</p>
+            <div class="grid grid-cols-1 gap-2.5" id="conclusion-options-container"></div>
+          </div>
+
+          <!-- STEP 2: FORMAL EXPRESSION -->
+          <div id="step-2-card" class="bg-slate-900/40 border border-slate-800 rounded-2xl p-5 flex flex-col gap-4 transition-all duration-300 opacity-50 pointer-events-none">
+            <h3 class="text-sm font-extrabold uppercase tracking-wider text-slate-300 flex items-center justify-between">
+              <span><span class="bg-slate-700 text-slate-300 text-[10px] w-5 h-5 inline-flex items-center justify-center rounded-full mr-2 font-mono" id="step-2-badge-num">2</span>¿Cuál es su expresión formal?</span>
+              <span id="step-2-status" class="text-xs text-slate-500 font-bold">Bloqueado</span>
+            </h3>
+            <p class="text-sm text-slate-400">Identifica la fórmula lógica que expresa formalmente esa conclusión:</p>
+            <div class="grid grid-cols-1 gap-2.5" id="formula-options-container">
+              <p class="text-sm text-slate-500 italic text-center py-4">Completá el paso anterior primero.</p>
+            </div>
+          </div>
+
+          <!-- STEP 3: RULE OR FALLACY -->
+          <div id="step-3-card" class="bg-slate-900/40 border border-slate-800 rounded-2xl p-5 flex flex-col gap-4 transition-all duration-300 opacity-50 pointer-events-none">
+            <h3 class="text-sm font-extrabold uppercase tracking-wider text-slate-300 flex items-center justify-between">
+              <span><span class="bg-slate-700 text-slate-300 text-[10px] w-5 h-5 inline-flex items-center justify-center rounded-full mr-2 font-mono" id="step-3-badge-num">3</span>¿Qué regla o falacia aplica?</span>
+              <span id="step-3-status" class="text-xs text-slate-500 font-bold">Bloqueado</span>
+            </h3>
+            <p class="text-sm text-slate-400">Identifica la regla de inferencia o falacia lógica aplicada en esta deducción:</p>
+            <div class="grid grid-cols-1 gap-2.5" id="rule-options-container">
+              <p class="text-sm text-slate-500 italic text-center py-4">Completá los pasos anteriores primero.</p>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Explain Panel (Hidden, shown after step correct or error) -->
+        <div id="explanation-panel" class="hidden bg-slate-900/80 border p-5 rounded-xl text-base leading-relaxed transition duration-300">
+          <!-- Dynamic pedagogical explanations shown here -->
+        </div>
+
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- Toast Notifications Container -->
+  <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-md w-full"></div>
+
+  <!-- Victory / Level Complete Modal -->
+  <div id="victory-modal" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md hidden items-center justify-center z-50 p-4">
+    <div class="bg-gradient-to-b from-slate-900 to-slate-950 border border-emerald-500/30 rounded-3xl max-w-lg w-full p-8 flex flex-col items-center text-center gap-6 shadow-2xl relative overflow-hidden">
+      <div class="absolute -left-16 -top-16 w-36 h-36 bg-emerald-500/10 rounded-full blur-2xl"></div>
+      <div class="absolute -right-16 -bottom-16 w-36 h-36 bg-violet-500/10 rounded-full blur-2xl"></div>
+
+      <!-- Icon -->
+      <div class="w-20 h-24 bg-gradient-to-tr from-emerald-500 to-cyan-400 rounded-3xl flex items-center justify-center glow-green animate-bounce">
+        <i class="fa-solid fa-network-wired text-4xl text-white"></i>
+      </div>
+
+      <div>
+        <span class="text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1 rounded-full uppercase tracking-widest font-extrabold">¡Misión Resuelta!</span>
+        <h2 id="victory-title" class="text-2xl sm:text-3xl font-black mt-3 text-white">Deducción Decodificada</h2>
+        <p id="victory-desc" class="text-slate-400 mt-2 text-sm leading-relaxed">Has superado la prueba de inferencia, identificando la conclusión matemática y la regla/falacia aplicada.</p>
+      </div>
+
+      <!-- Reward Summary -->
+      <div class="w-full bg-slate-900/60 border border-slate-800 p-4 rounded-2xl flex justify-around items-center">
+        <div class="text-center">
+          <span class="text-xs text-slate-500 block uppercase font-bold tracking-widest">Recompensa</span>
+          <span class="text-lg font-black text-yellow-400">+<span id="victory-xp">100</span> XP</span>
+        </div>
+        <div class="w-px h-8 bg-slate-800"></div>
+        <div class="text-center">
+          <span class="text-xs text-slate-500 block uppercase font-bold tracking-widest">Racha</span>
+          <span class="text-lg font-black text-orange-500"><span id="victory-streak">1</span> 🔥</span>
+        </div>
+      </div>
+
+      <!-- Buttons -->
+      <div class="flex gap-4 w-full">
+        <button onclick="playSound('click'); toggleVictoryModal(false); restartLevel();" class="flex-1 py-3 border border-slate-800 hover:bg-slate-800 text-slate-300 font-bold rounded-xl transition">
+          <i class="fa-solid fa-arrows-rotate mr-1.5"></i>Repetir
+        </button>
+        <button id="btn-next-level" onclick="nextLevel()" class="flex-2 bg-gradient-to-r from-emerald-600 to-cyan-500 hover:from-emerald-500 hover:to-cyan-400 text-white font-extrabold px-6 py-3 rounded-xl transition transform active:scale-95 shadow-lg glow-green flex items-center justify-center space-x-2">
+          <span>Siguiente Misión</span>
+          <i class="fa-solid fa-arrow-right"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game Logic Engine -->
+  <script>
+    // Convierte flechas dobles a simples para el display formal
+    function formalStr(str) {
+      return str.replace(/⇒/g, '→').replace(/⇔/g, '↔');
+    }
+
+    // Limpia el texto de significado: quita variables entre paréntesis y traduce símbolos
+    function cleanMeaning(str) {
+      return str
+        .replace(/\s*\([^)]*\)/g, '')        // quita (s), (v), (¬s), (p ∧ m), etc.
+        .replace(/\s*⇒\s*/g, ', entonces ')
+        .replace(/\s*⇔\s*/g, ', si y solo si, ')
+        .replace(/\s*∧\s*/g, ' y ')
+        .replace(/\s*∨\s*/g, ' o ')
+        .replace(/¬\s*/g, 'no ')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+    }
+
+    // Base de datos de niveles del juego inicial de un solo paso
+    const CHALLENGES = [
+      {
+        id: 1,
+        title: "Doble Check en TikTok",
+        difficulty: "Fácil",
+        story: "Quieres que un bot de verificación apruebe tu cuenta. La IA de control te presenta las siguientes condiciones básicas de la red:",
+        premises: [
+          { formula: "s ⇒ v", meaning: "Si subes un edit con música trending (s) ⇒ Te haces viral (v)" },
+          { formula: "s", meaning: "Subes un edit con música trending (s)" }
+        ],
+        conclusions: [
+          { formula: "v", isCorrect: true, meaning: "Te haces viral (v)" },
+          { formula: "¬s", isCorrect: false, meaning: "No subes un edit con música trending (¬s)" },
+          { formula: "¬v", isCorrect: false, meaning: "No te haces viral (¬v)" },
+          { formula: "s ∧ ¬v", isCorrect: false, meaning: "Subes un edit con música trending pero no te haces viral" }
+        ],
+        rules: [
+          { key: "MP", name: "Modus Ponens (MP)", isCorrect: true, desc: "¡Perfecto! Tienes una implicación (A ⇒ B) y su antecedente (A), lo que lógicamente libera a su consecuente (B)." },
+          { key: "MT", name: "Modus Tollens (MT)", isCorrect: false, desc: "El Modus Tollens requeriría la negación del consecuente (¬v) para deducir la negación del antecedente." },
+          { key: "AC", name: "Falacia de Afirmación del Consecuente", isCorrect: false, desc: "No es una falacia. Es una regla de inferencia válida y directa llamada Modus Ponens." },
+          { key: "SD", name: "Silogismo Disyuntivo (SD)", isCorrect: false, desc: "El Silogismo Disyuntivo requiere una disyunción (∨) en las premisas, no un condicional (⇒)." }
+        ],
+        xpReward: 100
+      },
+      {
+        id: 2,
+        title: "La Trampa del Streamer",
+        difficulty: "Fácil",
+        story: "Un seguidor en tu chat de Twitch te propone un reto lógico para desbloquear un emote exclusivo. ¡Ten cuidado con las trampas argumentales!",
+        premises: [
+          { formula: "s ⇒ v", meaning: "Si streameas sin lag (s) ⇒ Consigues viewers (v)" },
+          { formula: "v", meaning: "Consigues viewers (v)" }
+        ],
+        conclusions: [
+          { formula: "s", isCorrect: true, meaning: "Streameas sin lag (s)" }, // Conclusión de la trampa argumental (el estudiante la selecciona para luego desenmascarar que es falaz)
+          { formula: "¬s", isCorrect: false, meaning: "No streameas sin lag (¬s)" },
+          { formula: "¬v", isCorrect: false, meaning: "No consigues viewers (¬v)" },
+          { formula: "v ⇒ s", isCorrect: false, meaning: "Si consigues viewers ⇒ Streameas sin lag" }
+        ],
+        rules: [
+          { key: "MP", name: "Modus Ponens (MP)", isCorrect: false, desc: "¡Incorrecto! El Modus Ponens va de izquierda a derecha. Tener el consecuente (viewers) no demuestra que la causa haya sido no tener lag." },
+          { key: "AC", name: "Falacia de Afirmación del Consecuente", isCorrect: true, desc: "¡Exacto! Esto es una FALACIA. Del hecho de que consigues viewers (v), no puedes concluir con certeza que no tuviste lag (s), ya que podrías conseguir viewers por otras razones." },
+          { key: "NA", name: "Falacia de Negación del Antecedente", isCorrect: false, desc: "La negación del antecedente implicaría tener ¬s como premisa." },
+          { key: "MT", name: "Modus Tollens (MT)", isCorrect: false, desc: "El Modus Tollens requeriría la negación del consecuente (¬v)." }
+        ],
+        xpReward: 100
+      },
+      {
+        id: 3,
+        title: "Credenciales de Discord",
+        difficulty: "Medio",
+        story: "Intentas acceder a las opciones de Administrador de tu servidor de Discord. El bot de seguridad te obliga a simplificar una conjunción de credenciales:",
+        premises: [
+          { formula: "p ∧ m", meaning: "Programas un bot divertido (p) ∧ Moderas el chat activamente (m)" }
+        ],
+        conclusions: [
+          { formula: "p", isCorrect: true, meaning: "Programas un bot divertido (p)" },
+          { formula: "¬p", isCorrect: false, meaning: "No programas un bot divertido (¬p)" },
+          { formula: "p ⇒ m", isCorrect: false, meaning: "Si programas un bot divertido ⇒ Moderas el chat" },
+          { formula: "m ⇒ p", isCorrect: false, meaning: "Si moderas el chat ⇒ Programas un bot divertido" }
+        ],
+        rules: [
+          { key: "SIMP", name: "Simplificación (SIMP)", isCorrect: true, desc: "¡Excelente! Si tienes una conjunción (A ∧ B) donde ambas partes son verdaderas, puedes deducir con total seguridad cualquiera de ellas por separado." },
+          { key: "CONJ", name: "Conjunción (CONJ)", isCorrect: false, desc: "La conjunción es la regla contraria: sirve para unir dos premisas separadas en una sola." },
+          { key: "SD", name: "Silogismo Disyuntivo (SD)", isCorrect: false, desc: "No aplica. Aquí no hay ninguna disyunción (∨) involucrada en la premisa." },
+          { key: "DN", name: "Doble Negación (DN)", isCorrect: false, desc: "La doble negación se utiliza para añadir o quitar símbolos de negación (¬¬)." }
+        ],
+        xpReward: 120
+      },
+      {
+        id: 4,
+        title: "La Tarea del Programador",
+        difficulty: "Medio",
+        story: "Mañana hay examen sorpresa de Java y Python. Las opciones de tu noche de estudio se reducen lógicamente:",
+        premises: [
+          { formula: "e ∨ j", meaning: "Estudias con resúmenes (e) ∨ Juegas Minecraft toda la noche (j)" },
+          { formula: "¬j", meaning: "No juegas Minecraft toda la noche (¬j)" }
+        ],
+        conclusions: [
+          { formula: "e", isCorrect: true, meaning: "Estudias con resúmenes (e)" },
+          { formula: "¬e", isCorrect: false, meaning: "No estudias con resúmenes (¬e)" },
+          { formula: "j", isCorrect: false, meaning: "Juegas Minecraft toda la noche (j)" },
+          { formula: "e ∧ j", isCorrect: false, meaning: "Estudias con resúmenes y juegas Minecraft" }
+        ],
+        rules: [
+          { key: "SD", name: "Silogismo Disyuntivo (SD)", isCorrect: true, desc: "¡Brillante! Tienes una disyunción que te da dos opciones (A ∨ B) y la negación de una de ellas (¬B). Por descarte puro, la otra opción (A) tiene que ser verdadera." },
+          { key: "MP", name: "Modus Ponens (MP)", isCorrect: false, desc: "El Modus Ponens requiere un condicional (⇒) como premisa de partida, no una disyunción (∨)." },
+          { key: "MT", name: "Modus Tollens (MT)", isCorrect: false, desc: "No aplica. El Modus Tollens opera sobre condicionales." },
+          { key: "AD", name: "Adición (AD)", isCorrect: false, desc: "La adición sirve para añadir elementos nuevos mediante disyunción, no para descartarlos." }
+        ],
+        xpReward: 120
+      },
+      {
+        id: 5,
+        title: "Parcheando el Firewall",
+        difficulty: "Medio",
+        story: "El firewall principal de tu escuela está bajo ataque. Analizas el código de protección e identificas la siguiente relación de eventos:",
+        premises: [
+          { formula: "p ⇒ ¬e", meaning: "Si el parche de seguridad funciona (p) ⇒ La IA no se escapa (¬e)" },
+          { formula: "e", meaning: "La IA se escapa (e)" }
+        ],
+        conclusions: [
+          { formula: "¬p", isCorrect: true, meaning: "El parche de seguridad no funciona (¬p)" },
+          { formula: "p", isCorrect: false, meaning: "El parche de seguridad funciona (p)" },
+          { formula: "¬e", isCorrect: false, meaning: "La IA no se escapa (¬e)" },
+          { formula: "p ∧ e", isCorrect: false, meaning: "El parche funciona y la IA se escapa" }
+        ],
+        rules: [
+          { key: "MP", name: "Modus Ponens (MP)", isCorrect: false, desc: "Para aplicar Modus Ponens necesitarías tener 'p' como premisa." },
+          { key: "MT", name: "Modus Tollens (MT)", isCorrect: true, desc: "¡Correcto! El Modus Tollens establece que si tienes un condicional (A ⇒ B) y se niega el consecuente (¬B, en este caso la doble negación de ¬e es e), entonces se niega el antecedente (¬A, o sea ¬p)." },
+          { key: "NA", name: "Falacia de Negación del Antecedente", isCorrect: false, desc: "No es una falacia. Esta es una inferencia válida y formalmente correcta." },
+          { key: "SD", name: "Silogismo Disyuntivo (SD)", isCorrect: false, desc: "No hay disyunciones (∨) de base en las premisas para aplicar descarte." }
+        ],
+        xpReward: 150
+      },
+      {
+        id: 6,
+        title: "La Amenaza Hacker",
+        difficulty: "Difícil",
+        story: "Un hacker intenta engañarte con un argumento capcioso sobre la seguridad de tu dispositivo de streaming. ¡Descubre la trampa de inmediato!",
+        premises: [
+          { formula: "p ⇒ s", meaning: "Si tienes un antivirus pirata (p) ⇒ Tu sistema es vulnerable (s)" },
+          { formula: "¬p", meaning: "No tienes un antivirus pirata (¬p)" }
+        ],
+        conclusions: [
+          { formula: "¬s", isCorrect: true, meaning: "Tu sistema no es vulnerable (¬s)" },
+          { formula: "s", isCorrect: false, meaning: "Tu sistema es vulnerable (s)" },
+          { formula: "p", isCorrect: false, meaning: "Tienes un antivirus pirata (p)" },
+          { formula: "p ⇒ ¬s", isCorrect: false, meaning: "Si tienes antivirus pirata ⇒ Tu sistema no es vulnerable" }
+        ],
+        rules: [
+          { key: "MT", name: "Modus Tollens (MT)", isCorrect: false, desc: "¡Error común! El Modus Tollens requiere negar el consecuente (¬s), no el antecedente (¬p)." },
+          { key: "NA", name: "Falacia de Negación del Antecedente", isCorrect: true, desc: "¡Excelente ojo clínico! Del hecho de que no tengas un antivirus pirata (¬p), no puedes deducir con certeza que tu sistema no sea vulnerable (¬s), ya que podría ser vulnerable por otras causas (como no actualizar el sistema)." },
+          { key: "AC", name: "Falacia de Afirmación del Consecuente", isCorrect: false, desc: "La afirmación del consecuente requeriría tener 's' como premisa." },
+          { key: "MP", name: "Modus Ponens (MP)", isCorrect: false, desc: "El Modus Ponens requiere el antecedente afirmativo (p), no su negación." }
+        ],
+        xpReward: 150
+      },
+      {
+        id: 7,
+        title: "El Servidor Desconectado",
+        difficulty: "Difícil",
+        story: "Para aislar un virus en un servidor de Discord, necesitas ejecutar una doble negación lógica sobre las directivas de seguridad para estabilizar los comandos:",
+        premises: [
+          { formula: "¬¬d", meaning: "No es verdad que el servidor no está desconectado (¬¬d)" }
+        ],
+        conclusions: [
+          { formula: "d", isCorrect: true, meaning: "El servidor está desconectado (d)" },
+          { formula: "¬d", isCorrect: false, meaning: "El servidor no está desconectado (¬d)" },
+          { formula: "d ∧ ¬d", isCorrect: false, meaning: "El servidor está y no está desconectado (Absurdo)" },
+          { formula: "d ∨ ¬d", isCorrect: false, meaning: "El servidor está o no está desconectado (Tautología)" }
+        ],
+        rules: [
+          { key: "DN", name: "Doble Negación (DN)", isCorrect: true, desc: "¡Perfecto! La regla de Doble Negación permite simplificar una afirmación eliminando dos negaciones consecutivas (¬¬A ⇔ A) o viceversa." },
+          { key: "SIMP", name: "Simplificación (SIMP)", isCorrect: false, desc: "La simplificación se usa en conjunciones (∧), no sobre negaciones iteradas." },
+          { key: "MP", name: "Modus Ponens (MP)", isCorrect: false, desc: "Aquí no hay implicación (⇒) involucrada en absoluto." },
+          { key: "SD", name: "Silogismo Disyuntivo (SD)", isCorrect: false, desc: "No hay disyunción (∨) para aplicar un descarte." }
+        ],
+        xpReward: 180
+      },
+      {
+        id: 8,
+        title: "Skins de Regalo",
+        difficulty: "Legendario",
+        story: "Dos amigos te prometen enviarte skins si completas dos tareas independientes. Consigues resolver ambas por separado e intentas consolidar tu inventario:",
+        premises: [
+          { formula: "p", meaning: "Tienes el juego comprado (p)" },
+          { formula: "s", meaning: "Tienes skins nuevas en tu inventario (s)" }
+        ],
+        conclusions: [
+          { formula: "p ∧ s", isCorrect: true, meaning: "Tienes el juego comprado ∧ tienes skins nuevas (p ∧ s)" },
+          { formula: "p ∨ s", isCorrect: false, meaning: "Tienes el juego comprado o tienes skins nuevas (p ∨ s)" },
+          { formula: "p ⇒ s", isCorrect: false, meaning: "Si tienes el juego comprado ⇒ Tienes skins nuevas" },
+          { formula: "¬p", isCorrect: false, meaning: "No tienes el juego comprado" }
+        ],
+        rules: [
+          { key: "CONJ", name: "Conjunción (CONJ)", isCorrect: true, desc: "¡Maravilloso! Si has demostrado la veracidad de dos proposiciones de forma independiente (A y B), puedes unirlas legítimamente en una sola conjunción (A ∧ B)." },
+          { key: "SIMP", name: "Simplificación (SIMP)", isCorrect: false, desc: "La simplificación es la regla opuesta: desarma una conjunción existente." },
+          { key: "AD", name: "Adición (AD)", isCorrect: false, desc: "La adición añade cualquier término arbitrario mediante una disyunción (∨), no una conjunción (∧)." },
+          { key: "DN", name: "Doble Negación (DN)", isCorrect: false, desc: "La doble negación no aplica para unir proposiciones diferentes." }
+        ],
+        xpReward: 200
+      },
+      {
+        id: 9,
+        title: "La Cadena del Algoritmo",
+        difficulty: "Difícil",
+        story: "El cortafuegos de TikTok tiene dos reglas encadenadas. El sistema te pide que demuestres la consecuencia final de la cadena completa de un solo golpe, sin pasos intermedios.",
+        premises: [
+          { formula: "s ⇒ v", meaning: "Si subís un edit con música trending (s) ⇒ Te hacés viral (v)" },
+          { formula: "v ⇒ f", meaning: "Si te hacés viral (v) ⇒ Ganás miles de seguidores (f)" }
+        ],
+        conclusions: [
+          { formula: "s ⇒ f", isCorrect: true, meaning: "Si subís un edit con música trending (s) ⇒ Ganás miles de seguidores (f)" },
+          { formula: "s ⇒ v", isCorrect: false, meaning: "Si subís un edit con música trending (s) ⇒ Te hacés viral (v)" },
+          { formula: "v ⇒ s", isCorrect: false, meaning: "Si te hacés viral (v) ⇒ Subís un edit con música trending (s)" },
+          { formula: "¬s ⇒ ¬f", isCorrect: false, meaning: "Si no subís un edit con música trending ⇒ No ganás seguidores" }
+        ],
+        rules: [
+          { key: "SH", name: "Silogismo Hipotético (SH)", isCorrect: true, desc: "¡Correcto! El Silogismo Hipotético encadena dos condicionales: si tenés A⇒B y B⇒C, podés concluir directamente A⇒C, saltando el eslabón intermedio." },
+          { key: "MP", name: "Modus Ponens (MP)", isCorrect: false, desc: "El Modus Ponens requiere tener el antecedente afirmado (s) como premisa. Aquí no tenés s, solo los dos condicionales encadenados." },
+          { key: "MT", name: "Modus Tollens (MT)", isCorrect: false, desc: "El Modus Tollens requiere la negación del consecuente (¬f) como premisa. Eso no está disponible aquí." },
+          { key: "CONJ", name: "Conjunción (CONJ)", isCorrect: false, desc: "La conjunción une dos proposiciones en A∧B. No produce un condicional encadenado." }
+        ],
+        xpReward: 180
+      },
+      {
+        id: 10,
+        title: "Expandiendo el Inventario",
+        difficulty: "Legendario",
+        story: "Acabás de conseguir la skin épica del torneo. El sistema de logros te pide que registres esta victoria como un logro compartido, añadiendo cualquier otra condición posible a tu perfil de jugador.",
+        premises: [
+          { formula: "s", meaning: "Conseguiste la skin épica del torneo (s)" }
+        ],
+        conclusions: [
+          { formula: "s ∨ r", isCorrect: true, meaning: "Conseguiste la skin épica o tenés el pase de batalla (s ∨ r)" },
+          { formula: "¬s", isCorrect: false, meaning: "No conseguiste la skin épica (¬s)" },
+          { formula: "s ∧ r", isCorrect: false, meaning: "Conseguiste la skin épica y tenés el pase de batalla (s ∧ r)" },
+          { formula: "r", isCorrect: false, meaning: "Tenés el pase de batalla (r)" }
+        ],
+        rules: [
+          { key: "AD", name: "Adición (AD)", isCorrect: true, desc: "¡Exacto! La Adición permite que, a partir de una proposición verdadera (A), concluyas su disyunción con cualquier otra proposición (A∨B), sin importar si B es verdadera o no." },
+          { key: "CONJ", name: "Conjunción (CONJ)", isCorrect: false, desc: "La conjunción requiere que tengas AMBAS proposiciones probadas. Aquí solo tenés s, no r, así que no podés unirlas con ∧." },
+          { key: "MP", name: "Modus Ponens (MP)", isCorrect: false, desc: "El Modus Ponens requiere un condicional (A→B) como premisa. Aquí solo tenés s, sin ningún condicional." },
+          { key: "DN", name: "Doble Negación (DN)", isCorrect: false, desc: "La doble negación opera sobre negaciones (¬¬A↔A). No aplica para una proposición simple afirmativa." }
+        ],
+        xpReward: 220
+      }
+    ];
+
+    let currentLevelIndex = 0;
+    let globalXP = 0;
+    let globalStreak = 0;
+    let completedLevelsCount = 0;
+    
+    let selectedConclusion = null;
+    let selectedRule = null;
+    let phase = 1; // 1 = Eligiendo Conclusión, 2 = Eligiendo Regla/Falacia
+    let shuffledConclusions = [];
+    let shuffledRules = [];
+
+    function shuffleArray(arr) {
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    window.onload = function() {
+      loadProgress();
+      renderLevels();
+      showHome();
+    };
+
+    function loadProgress() {
+      globalXP = parseInt(localStorage.getItem('logicquest_v2_xp')) || 0;
+      globalStreak = parseInt(localStorage.getItem('logicquest_v2_streak')) || 0;
+      completedLevelsCount = parseInt(localStorage.getItem('logicquest_v2_completed_count')) || 0;
+      updateGlobalStatsUI();
+    }
+
+    function saveProgress() {
+      localStorage.setItem('logicquest_v2_xp', globalXP);
+      localStorage.setItem('logicquest_v2_streak', globalStreak);
+      localStorage.setItem('logicquest_v2_completed_count', completedLevelsCount);
+    }
+
+    function updateGlobalStatsUI() {
+      document.getElementById('global-xp').innerText = globalXP;
+      document.getElementById('global-streak').innerText = globalStreak;
+      
+      let rank = "Iniciado Lógico";
+      if (globalXP >= 800) rank = "Lógico Legendario 👑";
+      else if (globalXP >= 500) rank = "Cerebro Algorítmico 🧠";
+      else if (globalXP >= 250) rank = "Hacker Proposicional 💻";
+      else if (globalXP >= 100) rank = "Aprendiz de Hacker ⚡";
+      
+      document.getElementById('global-rank').innerText = rank;
+      document.getElementById('mission-progress').innerText = `${completedLevelsCount}/${CHALLENGES.length} Descifrados`;
+    }
+
+    function showHome() {
+      document.getElementById('welcome-panel').classList.remove('hidden');
+      document.getElementById('game-arena').classList.add('hidden');
+      renderLevels();
+    }
+
+    function renderLevels() {
+      const container = document.getElementById('levels-list');
+      container.innerHTML = "";
+      
+      CHALLENGES.forEach((level, idx) => {
+        const isCompleted = idx < completedLevelsCount;
+        const isActive = idx === completedLevelsCount;
+        const isLocked = idx > completedLevelsCount;
+        
+        let cardClass = "";
+        let iconHtml = "";
+        let onclickAction = "";
+        
+        if (isCompleted) {
+          cardClass = "border-emerald-500/30 bg-emerald-950/20 text-slate-300";
+          iconHtml = `<i class="fa-solid fa-circle-check text-emerald-500 text-lg"></i>`;
+          onclickAction = `startLevel(${idx})`;
+        } else if (isActive) {
+          cardClass = "border-violet-500 bg-violet-950/10 text-white glow-purple";
+          iconHtml = `<span class="flex h-3 w-3 relative"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75"></span><span class="relative inline-flex rounded-full h-3 w-3 bg-violet-500"></span></span>`;
+          onclickAction = `startLevel(${idx})`;
+        } else {
+          cardClass = "border-slate-800 bg-slate-900/30 text-slate-600 cursor-not-allowed opacity-50";
+          iconHtml = `<i class="fa-solid fa-lock text-slate-700"></i>`;
+        }
+        
+        container.innerHTML += `
+          <div onclick="${onclickAction ? `playSound('click'); ${onclickAction};` : ''}" class="border ${cardClass} rounded-xl p-3.5 flex items-center justify-between transition transform ${isLocked ? '' : 'hover:scale-[1.02] cursor-pointer'}">
+            <div class="flex items-center space-x-3">
+              <span class="text-xs font-mono font-bold text-slate-500">0${level.id}</span>
+              <div>
+                <h4 class="text-sm font-bold tracking-tight">${level.title}</h4>
+                <p class="text-[10px] text-slate-500 font-semibold">${level.difficulty} &bull; +${level.xpReward} XP</p>
+              </div>
+            </div>
+            <div>${iconHtml}</div>
+          </div>
+        `;
+      });
+    }
+
+    function startLevel(index) {
+      currentLevelIndex = index;
+      const level = CHALLENGES[index];
+      phase = 1;
+      selectedConclusion = null;
+      selectedRule = null;
+      
+      document.getElementById('welcome-panel').classList.add('hidden');
+      document.getElementById('game-arena').classList.remove('hidden');
+      
+      document.getElementById('level-badge').innerText = `Misión ${level.id}`;
+      document.getElementById('difficulty-badge').innerText = level.difficulty;
+      document.getElementById('level-title').innerText = level.title;
+      document.getElementById('level-story').innerText = level.story;
+      
+      const premContainer = document.getElementById('premises-container');
+      premContainer.innerHTML = "";
+      level.premises.forEach((p, idx) => {
+        premContainer.innerHTML += `
+          <div class="flex items-center space-x-3 p-4 rounded-xl border border-slate-800 bg-slate-950/40">
+            <span class="code-font text-sm font-bold text-violet-500 bg-slate-900 px-2 py-1 rounded border border-slate-800 shrink-0">Línea ${idx + 1}</span>
+            <p class="text-lg text-white font-medium">${cleanMeaning(p.meaning)}</p>
+          </div>
+        `;
+      });
+
+      document.getElementById('explanation-panel').classList.add('hidden');
+
+      setStepActive(1);
+      setStepLocked(2);
+      setStepLocked(3);
+
+      renderLevels();
+      renderConclusionOptions();
+      document.getElementById('formula-options-container').innerHTML = `<p class="text-sm text-slate-500 italic text-center py-4">Completá el paso anterior primero.</p>`;
+      document.getElementById('rule-options-container').innerHTML = `<p class="text-sm text-slate-500 italic text-center py-4">Completá los pasos anteriores primero.</p>`;
+    }
+
+    function restartLevel() {
+      startLevel(currentLevelIndex);
+      showToast("Filtro reiniciado. ¡Resuelve de nuevo!", "info");
+    }
+
+    function renderConclusionOptions() {
+      const level = CHALLENGES[currentLevelIndex];
+      shuffledConclusions = shuffleArray(level.conclusions);
+      const container = document.getElementById('conclusion-options-container');
+      container.innerHTML = "";
+
+      shuffledConclusions.forEach((opt, idx) => {
+        container.innerHTML += `
+          <button id="btn-conclusion-${idx}" onclick="playSound('click'); handleSelectConclusion(${idx})" class="w-full text-left p-4 bg-slate-950 hover:bg-slate-900/60 border border-slate-800 hover:border-slate-700 rounded-xl transition-all duration-200">
+            <div class="flex justify-between items-center gap-3">
+              <span class="text-base font-semibold text-white leading-snug">${cleanMeaning(opt.meaning)}</span>
+              <span class="text-xs text-slate-500 uppercase tracking-widest font-bold shrink-0">Seleccionar</span>
+            </div>
+          </button>
+        `;
+      });
+    }
+
+    function renderFormulaOptions() {
+      const level = CHALLENGES[currentLevelIndex];
+      // Reutiliza el orden ya mezclado del paso 1 (shuffledConclusions ya está definido)
+      const container = document.getElementById('formula-options-container');
+      container.innerHTML = "";
+
+      shuffledConclusions.forEach((opt, idx) => {
+        const premisasHtml = level.premises.map(p =>
+          `<div class="code-font text-base text-slate-300 leading-relaxed">${formalStr(p.formula)}</div>`
+        ).join('');
+
+        container.innerHTML += `
+          <button id="btn-formula-${idx}" onclick="playSound('click'); handleSelectFormula(${idx})" class="w-full text-left p-4 bg-slate-950 hover:bg-slate-900/60 border border-slate-800 hover:border-slate-700 rounded-xl transition-all duration-200">
+            <div class="flex justify-between items-start gap-3">
+              <div>
+                ${premisasHtml}
+                <div class="code-font text-base font-bold text-violet-400 border-t border-slate-700 pt-2 mt-2">∴ ${formalStr(opt.formula)}</div>
+              </div>
+              <span class="text-xs text-slate-500 uppercase tracking-widest font-bold shrink-0 mt-1">Seleccionar</span>
+            </div>
+          </button>
+        `;
+      });
+    }
+
+    // NORMALIZACIÓN DE COMPARACIÓN DE FÓRMULAS UNICODE
+    function cleanUnicodeStr(str) {
+      return str.trim()
+                .replace(/\s+/g, '')
+                .replace(/⇒/g, '⇒')
+                .replace(/¬/g, '¬')
+                .replace(/∧/g, '∧')
+                .replace(/∨/g, '∨')
+                .replace(/⇔/g, '⇔');
+    }
+
+    function handleSelectConclusion(index) {
+      if (phase !== 1) return;
+
+      const opt = shuffledConclusions[index];
+
+      shuffledConclusions.forEach((_, idx) => {
+        const btn = document.getElementById(`btn-conclusion-${idx}`);
+        if (btn) {
+          btn.classList.remove('border-violet-500', 'bg-violet-950/20', 'text-white', 'glow-purple');
+          btn.classList.add('border-slate-800', 'bg-slate-950');
+        }
+      });
+
+      const activeBtn = document.getElementById(`btn-conclusion-${index}`);
+      if (activeBtn) {
+        activeBtn.classList.remove('border-slate-800', 'bg-slate-950');
+        activeBtn.classList.add('border-violet-500', 'bg-violet-950/20', 'text-white', 'glow-purple');
+      }
+
+      // Comparación robusta normalizada contra Unicode
+      if (opt.isCorrect) {
+        playSound('correct_step');
+        showToast("¡Correcto! Ahora identificá su expresión formal.", "success");
+        selectedConclusion = opt;
+
+        phase = 2;
+        setStepCompleted(1);
+        setStepActive(2);
+        renderFormulaOptions();
+      } else {
+        playSound('error');
+        showToast("Esa conclusión no se deriva de las premisas.", "error");
+        showStepExplanation(`<strong>Conclusión incorrecta:</strong> La opción elegida no se desprende lógicamente de las premisas. Revisá el significado de cada una e intentá de nuevo.`, "error");
+      }
+    }
+
+    function handleSelectFormula(index) {
+      if (phase !== 2) return;
+
+      const opt = shuffledConclusions[index];
+
+      shuffledConclusions.forEach((_, idx) => {
+        const btn = document.getElementById(`btn-formula-${idx}`);
+        if (btn) {
+          btn.classList.remove('border-violet-500', 'bg-violet-950/20', 'glow-purple');
+          btn.classList.add('border-slate-800', 'bg-slate-950');
+        }
+      });
+
+      const activeBtn = document.getElementById(`btn-formula-${index}`);
+      if (activeBtn) {
+        activeBtn.classList.remove('border-slate-800', 'bg-slate-950');
+        activeBtn.classList.add('border-violet-500', 'bg-violet-950/20', 'glow-purple');
+      }
+
+      if (opt.isCorrect) {
+        playSound('correct_step');
+        showToast("¡Expresión formal correcta! Ahora identificá la regla aplicada.", "success");
+
+        phase = 3;
+        setStepCompleted(2);
+        setStepActive(3);
+        renderRuleOptions();
+      } else {
+        playSound('error');
+        showToast("Esa fórmula no corresponde a la conclusión seleccionada.", "error");
+        showStepExplanation(`<strong>Fórmula incorrecta:</strong> La expresión <span class="code-font text-rose-400 font-bold">${opt.formula}</span> no representa formalmente la conclusión que identificaste. Revisá la correspondencia entre el lenguaje natural y la notación lógica.`, "error");
+      }
+    }
+
+    function renderRuleOptions() {
+      const level = CHALLENGES[currentLevelIndex];
+      shuffledRules = shuffleArray(level.rules);
+      const container = document.getElementById('rule-options-container');
+      container.innerHTML = "";
+
+      shuffledRules.forEach((opt, idx) => {
+        container.innerHTML += `
+          <button id="btn-rule-${idx}" onclick="playSound('click'); handleSelectRule(${idx})" class="w-full text-left p-3.5 bg-slate-950 hover:bg-slate-900/60 border border-slate-800 hover:border-slate-700 rounded-xl transition-all duration-200">
+            <div class="flex justify-between items-center gap-3">
+              <span class="text-sm font-bold text-white tracking-wide">${opt.name}</span>
+              <span class="text-[10px] text-slate-500 uppercase tracking-widest font-bold shrink-0">Aplicar</span>
+            </div>
+          </button>
+        `;
+      });
+    }
+
+    function handleSelectRule(index) {
+      if (phase !== 3) return;
+
+      const level = CHALLENGES[currentLevelIndex];
+      const opt = shuffledRules[index];
+
+      shuffledRules.forEach((_, idx) => {
+        const btn = document.getElementById(`btn-rule-${idx}`);
+        if (btn) {
+          btn.classList.remove('border-emerald-500', 'bg-emerald-950/20', 'text-white', 'glow-green', 'border-rose-500', 'bg-rose-950/20', 'glow-rose');
+          btn.classList.add('border-slate-800', 'bg-slate-950');
+        }
+      });
+
+      const activeBtn = document.getElementById(`btn-rule-${index}`);
+
+      if (opt.isCorrect) {
+        playSound('success');
+        if (activeBtn) {
+          activeBtn.classList.remove('border-slate-800', 'bg-slate-950');
+          activeBtn.classList.add('border-emerald-500', 'bg-emerald-950/20', 'text-white', 'glow-green');
+        }
+
+        setStepCompleted(3);
+        showStepExplanation(`<strong>¡Excelente razonamiento!</strong> ${opt.desc}`, "success");
+
+        setTimeout(() => {
+          try {
+            globalXP += level.xpReward;
+            globalStreak += 1;
+
+            if (currentLevelIndex === completedLevelsCount) {
+              completedLevelsCount += 1;
+            }
+
+            try { saveProgress(); } catch(e) { console.warn('localStorage no disponible:', e); }
+            updateGlobalStatsUI();
+
+            document.getElementById('victory-xp').innerText = level.xpReward;
+            document.getElementById('victory-streak').innerText = globalStreak;
+            document.getElementById('victory-title').innerText = `¡Misión "${level.title}" Completada!`;
+
+            const nextBtn = document.getElementById('btn-next-level');
+            if (completedLevelsCount >= CHALLENGES.length) {
+              nextBtn.innerHTML = `<span>Terminar Entrenamiento</span> <i class="fa-solid fa-flag-checkered"></i>`;
+            } else {
+              nextBtn.innerHTML = `<span>Siguiente Misión</span> <i class="fa-solid fa-arrow-right"></i>`;
+            }
+          } catch(e) {
+            console.error('Error en victoria:', e);
+          } finally {
+            toggleVictoryModal(true);
+          }
+        }, 1200);
+
+      } else {
+        playSound('error');
+        if (activeBtn) {
+          activeBtn.classList.remove('border-slate-800', 'bg-slate-950');
+          activeBtn.classList.add('border-rose-500', 'bg-rose-950/20', 'text-white', 'glow-rose');
+        }
+        showToast("Explicación incorrecta para esta deducción.", "error");
+        showStepExplanation(`<strong>Análisis Incorrecto:</strong> ${opt.desc}`, "error");
+      }
+    }
+
+    function setStepActive(stepNum) {
+      const card = document.getElementById(`step-${stepNum}-card`);
+      const status = document.getElementById(`step-${stepNum}-status`);
+      const badge = document.getElementById(`step-${stepNum}-badge-num`);
+
+      card.classList.remove('opacity-50', 'pointer-events-none');
+      card.classList.add('glow-purple', 'border-violet-800/40');
+
+      status.innerHTML = `<span class="text-violet-400 font-bold animate-pulse"><i class="fa-solid fa-circle-play mr-1"></i> En Curso</span>`;
+      if (badge) {
+        badge.classList.remove('bg-slate-700', 'text-slate-300');
+        badge.classList.add('bg-violet-600', 'text-white');
+      }
+    }
+
+    function setStepCompleted(stepNum) {
+      const card = document.getElementById(`step-${stepNum}-card`);
+      const status = document.getElementById(`step-${stepNum}-status`);
+
+      card.classList.remove('glow-purple', 'border-violet-800/40');
+      card.classList.add('border-emerald-800/30', 'bg-emerald-950/5');
+
+      status.innerHTML = `<span class="text-emerald-400 font-extrabold"><i class="fa-solid fa-circle-check mr-1"></i> Resuelto</span>`;
+    }
+
+    function setStepLocked(stepNum) {
+      const card = document.getElementById(`step-${stepNum}-card`);
+      const status = document.getElementById(`step-${stepNum}-status`);
+      const badge = document.getElementById(`step-${stepNum}-badge-num`);
+
+      card.classList.add('opacity-50', 'pointer-events-none');
+      card.classList.remove('glow-purple', 'border-violet-800/40', 'border-emerald-800/30', 'bg-emerald-950/5');
+
+      status.innerHTML = `<span class="text-slate-500"><i class="fa-solid fa-lock mr-1"></i> Bloqueado</span>`;
+      if (badge) {
+        badge.classList.add('bg-slate-700', 'text-slate-300');
+        badge.classList.remove('bg-violet-600', 'text-white');
+      }
+    }
+
+    function showStepExplanation(htmlText, type) {
+      const panel = document.getElementById('explanation-panel');
+      panel.classList.remove('hidden');
+      panel.innerHTML = htmlText;
+
+      panel.classList.remove('border-emerald-500/30', 'bg-emerald-950/20', 'text-emerald-300', 'border-rose-500/30', 'bg-rose-950/20', 'text-rose-300');
+      if (type === 'success') {
+        panel.classList.add('border-emerald-500/30', 'bg-emerald-950/20', 'text-emerald-300');
+      } else {
+        panel.classList.add('border-rose-500/30', 'bg-rose-950/20', 'text-rose-300');
+      }
+    }
+
+    function toggleVictoryModal(show) {
+      const modal = document.getElementById('victory-modal');
+      if (show) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+      } else {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }
+    }
+
+    function nextLevel() {
+      toggleVictoryModal(false);
+      if (completedLevelsCount >= CHALLENGES.length) {
+        showHome();
+        showToast("👑 ¡Espectacular! Has completado el filtro de entrenamiento de primer paso.", "success");
+      } else {
+        startLevel(completedLevelsCount);
+      }
+    }
+
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      
+      let borderClass = 'border-slate-800 bg-slate-900 text-slate-100';
+      let icon = '<i class="fa-solid fa-circle-info text-blue-400"></i>';
+      
+      if (type === 'success') {
+        borderClass = 'border-emerald-500/30 bg-emerald-950/90 text-emerald-200 glow-green';
+        icon = '<i class="fa-solid fa-circle-check text-emerald-500"></i>';
+      } else if (type === 'error') {
+        borderClass = 'border-rose-500/30 bg-rose-950/90 text-rose-200';
+        icon = '<i class="fa-solid fa-triangle-exclamation text-rose-500"></i>';
+      }
+      
+      toast.className = `p-4 border rounded-xl flex items-start space-x-3 shadow-lg backdrop-blur transition-all duration-300 transform translate-y-2 opacity-0 ${borderClass}`;
+      toast.innerHTML = `
+        <div class="text-lg">${icon}</div>
+        <div class="flex-grow text-xs font-semibold leading-relaxed">${message}</div>
+        <button onclick="this.parentElement.remove()" class="text-slate-400 hover:text-white transition">
+          <i class="fa-solid fa-xmark text-xs"></i>
+        </button>
+      `;
+      
+      container.appendChild(toast);
+      
+      setTimeout(() => {
+        toast.classList.remove('translate-y-2', 'opacity-0');
+      }, 50);
+      
+      setTimeout(() => {
+        toast.classList.add('translate-y-2', 'opacity-0');
+        setTimeout(() => toast.remove(), 300);
+      }, 5000);
+    }
+  </script>
+</body>
+</html>
